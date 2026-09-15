@@ -1,0 +1,51 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 200  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    # all position-controlled joints (lift + head + both arms + grippers)
+    body_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    # differential-drive base: cmd_vel in, wheel speeds out, odometry + TF published
+    diff_drive_controller:
+      type: diff_drive_controller/DiffDriveController
+
+body_controller:
+  ros__parameters:
+    joints:
+      - torso_lift
+      - head_pan
+      - head_tilt
+      - left_shoulder_pan
+      - left_shoulder_lift
+      - left_elbow
+      - left_wrist_flex
+      - left_wrist_roll
+      - left_gripper
+      - right_shoulder_pan
+      - right_shoulder_lift
+      - right_elbow
+      - right_wrist_flex
+      - right_wrist_roll
+      - right_gripper
+    command_interfaces: [position]
+    state_interfaces: [position, velocity]
+    allow_partial_joints_goal: true
+
+diff_drive_controller:
+  ros__parameters:
+    left_wheel_names: [base_left_wheel]
+    right_wheel_names: [base_right_wheel]
+    wheel_separation: 0.26   # m, track width (wheels at y = ±0.13)
+    wheel_radius: 0.06       # m, matches nori.xml / MJCF
+    base_frame_id: base_link
+    odom_frame_id: odom
+    enable_odom_tf: true     # publish odom -> base_link TF
+    publish_rate: 50.0
+    open_loop: false         # integrate odometry from wheel feedback, not commands
+    # keep the sim tame; raise later once nav is tuned
+    linear.x.max_velocity: 0.6
+    angular.z.max_velocity: 2.0

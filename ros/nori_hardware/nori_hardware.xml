@@ -1,0 +1,10 @@
+<library path="nori_hardware">
+  <class name="nori_hardware/NoriMujocoSystem"
+         type="nori_hardware::NoriMujocoSystem"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      ros2_control SystemInterface that drives the Nori robot inside a MuJoCo
+      simulation running in-process (Sim Level C).
+    </description>
+  </class>
+</library>

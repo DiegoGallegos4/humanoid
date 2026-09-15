@@ -1,0 +1,154 @@
+<!-- Nori robot model (MJCF) — Stage 5, Sim Level C.
+     17 actuated DOF matching docs/architecture.md §1 and the joint names in §6.
+     Geometry/mass from §8b (REP-103: x fwd, y left, z up). This is the robot
+     body tree + actuators only; scene.xml adds the floor, light and visuals.
+     Refine link shapes/inertia later without changing joint names or the DOF set. -->
+<mujoco model="nori">
+  <compiler angle="radian" autolimits="true"/>
+  <option integrator="implicitfast" cone="elliptic"/>
+
+  <default>
+    <joint damping="0.5" armature="0.01"/>
+    <geom friction="1 0.05 0.001" density="700" rgba="0.25 0.5 0.85 1"/>
+    <default class="servo">
+      <!-- position-controlled smart servo (STS3215-class) -->
+      <position kp="30" kv="1" forcerange="-15 15"/>
+    </default>
+    <default class="wheel_drive">
+      <velocity kv="8" forcerange="-8 8"/>
+    </default>
+    <default class="lift_drive">
+      <!-- stiff, near-rigid: models a non-backdrivable lead screw holding the upper body -->
+      <position kp="4000" kv="150" forcerange="-400 400"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <!-- BASE: differential-drive chassis. Free joint so it stands on wheels+casters. -->
+    <body name="base" pos="0 0 0.06">
+      <freejoint name="base_free"/>
+      <geom name="base_box" type="box" pos="0 0 0.10" size="0.15 0.15 0.075" mass="2.3"/>
+      <site name="imu" pos="0 0 0.10" size="0.01"/>
+
+      <!-- drive wheels: spin about the lateral (y) axle, track ±0.13 -->
+      <body name="wheel_left" pos="0 0.13 0">
+        <joint name="base_left_wheel" type="hinge" axis="0 1 0"/>
+        <geom type="cylinder" fromto="0 -0.012 0 0 0.012 0" size="0.06" mass="0.1"
+              friction="1.5 0.05 0.001"/>
+      </body>
+      <body name="wheel_right" pos="0 -0.13 0">
+        <joint name="base_right_wheel" type="hinge" axis="0 1 0"/>
+        <geom type="cylinder" fromto="0 -0.012 0 0 0.012 0" size="0.06" mass="0.1"
+              friction="1.5 0.05 0.001"/>
+      </body>
+
+      <!-- passive casters (fore/aft), low-friction spheres -->
+      <geom name="caster_front" type="sphere" pos="0.12 0 -0.005" size="0.055" mass="0.02"
+            friction="0.05 0.005 0.0001"/>
+      <geom name="caster_rear" type="sphere" pos="-0.12 0 -0.005" size="0.055" mass="0.02"
+            friction="0.05 0.005 0.0001"/>
+
+      <!-- TORSO LIFT: prismatic column, 0..0.30 m travel. Origin at base top plate. -->
+      <body name="torso" pos="0 0 0.09">
+        <joint name="torso_lift" type="slide" axis="0 0 1" range="0 0.30"/>
+        <geom name="torso_col" type="box" pos="0 0 0.175" size="0.05 0.06 0.175" mass="1.4"/>
+
+        <!-- HEAD: pan/tilt, camera at shoulder+0.15 (retracted world z≈0.65) -->
+        <body name="head" pos="0 0 0.50">
+          <joint name="head_pan" type="hinge" axis="0 0 1" range="-1.5 1.5"/>
+          <geom name="neck" type="cylinder" fromto="0 0 -0.03 0 0 0" size="0.02" mass="0.05"/>
+          <body name="head_tilt_link">
+            <joint name="head_tilt" type="hinge" axis="0 1 0" range="-0.7 0.7"/>
+            <geom type="box" size="0.05 0.06 0.05" mass="0.3"/>
+            <camera name="head_cam" pos="0.06 0 0" xyaxes="0 -1 0 0 0 1" fovy="60"/>
+          </body>
+        </body>
+
+        <!-- LEFT ARM: SO-101 layout, shoulder at torso-local z=0.35 (world 0.50), y=+0.13 -->
+        <body name="left_shoulder" pos="0 0.13 0.35">
+          <joint name="left_shoulder_pan" type="hinge" axis="0 0 1" range="-1.9 1.9"/>
+          <geom type="sphere" size="0.03" mass="0.1"/>
+          <body name="left_upper_arm">
+            <joint name="left_shoulder_lift" type="hinge" axis="0 1 0" range="-1.9 1.9"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.12" size="0.02" mass="0.12"/>
+            <body name="left_forearm" pos="0 0 -0.12">
+              <joint name="left_elbow" type="hinge" axis="0 1 0" range="0 2.4"/>
+              <geom type="capsule" fromto="0 0 0 0 0 -0.12" size="0.018" mass="0.1"/>
+              <body name="left_wrist" pos="0 0 -0.12">
+                <joint name="left_wrist_flex" type="hinge" axis="0 1 0" range="-1.9 1.9"/>
+                <geom type="capsule" fromto="0 0 0 0 0 -0.05" size="0.015" mass="0.05"/>
+                <body name="left_gripper_base" pos="0 0 -0.05">
+                  <joint name="left_wrist_roll" type="hinge" axis="0 0 1" range="-3.0 3.0"/>
+                  <geom type="box" size="0.02 0.03 0.015" mass="0.04"/>
+                  <!-- one moving finger = 1-DOF parallel gripper -->
+                  <body name="left_finger" pos="0 0.02 -0.03">
+                    <joint name="left_gripper" type="slide" axis="0 -1 0" range="0 0.05"/>
+                    <geom type="box" size="0.005 0.005 0.025" mass="0.01"/>
+                  </body>
+                  <geom name="left_fixed_finger" type="box" pos="0 -0.02 -0.03"
+                        size="0.005 0.005 0.025" mass="0.01"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+
+        <!-- RIGHT ARM: mirror (y = -0.13) -->
+        <body name="right_shoulder" pos="0 -0.13 0.35">
+          <joint name="right_shoulder_pan" type="hinge" axis="0 0 1" range="-1.9 1.9"/>
+          <geom type="sphere" size="0.03" mass="0.1"/>
+          <body name="right_upper_arm">
+            <joint name="right_shoulder_lift" type="hinge" axis="0 1 0" range="-1.9 1.9"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.12" size="0.02" mass="0.12"/>
+            <body name="right_forearm" pos="0 0 -0.12">
+              <joint name="right_elbow" type="hinge" axis="0 1 0" range="0 2.4"/>
+              <geom type="capsule" fromto="0 0 0 0 0 -0.12" size="0.018" mass="0.1"/>
+              <body name="right_wrist" pos="0 0 -0.12">
+                <joint name="right_wrist_flex" type="hinge" axis="0 1 0" range="-1.9 1.9"/>
+                <geom type="capsule" fromto="0 0 0 0 0 -0.05" size="0.015" mass="0.05"/>
+                <body name="right_gripper_base" pos="0 0 -0.05">
+                  <joint name="right_wrist_roll" type="hinge" axis="0 0 1" range="-3.0 3.0"/>
+                  <geom type="box" size="0.02 0.03 0.015" mass="0.04"/>
+                  <body name="right_finger" pos="0 0.02 -0.03">
+                    <joint name="right_gripper" type="slide" axis="0 -1 0" range="0 0.05"/>
+                    <geom type="box" size="0.005 0.005 0.025" mass="0.01"/>
+                  </body>
+                  <geom name="right_fixed_finger" type="box" pos="0 -0.02 -0.03"
+                        size="0.005 0.005 0.025" mass="0.01"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- 17 actuators, one per DOF, in JointId order (see firmware/.../messages.hpp). -->
+  <actuator>
+    <velocity name="a_base_left_wheel"  joint="base_left_wheel"  class="wheel_drive"/>
+    <velocity name="a_base_right_wheel" joint="base_right_wheel" class="wheel_drive"/>
+    <position name="a_head_pan"  joint="head_pan"  class="servo"/>
+    <position name="a_head_tilt" joint="head_tilt" class="servo"/>
+    <position name="a_left_shoulder_pan"  joint="left_shoulder_pan"  class="servo"/>
+    <position name="a_left_shoulder_lift" joint="left_shoulder_lift" class="servo"/>
+    <position name="a_left_elbow"         joint="left_elbow"         class="servo"/>
+    <position name="a_left_wrist_flex"    joint="left_wrist_flex"    class="servo"/>
+    <position name="a_left_wrist_roll"    joint="left_wrist_roll"    class="servo"/>
+    <position name="a_left_gripper"       joint="left_gripper"       class="servo"/>
+    <position name="a_right_shoulder_pan"  joint="right_shoulder_pan"  class="servo"/>
+    <position name="a_right_shoulder_lift" joint="right_shoulder_lift" class="servo"/>
+    <position name="a_right_elbow"         joint="right_elbow"         class="servo"/>
+    <position name="a_right_wrist_flex"    joint="right_wrist_flex"    class="servo"/>
+    <position name="a_right_wrist_roll"    joint="right_wrist_roll"    class="servo"/>
+    <position name="a_right_gripper"       joint="right_gripper"       class="servo"/>
+    <position name="a_torso_lift" joint="torso_lift" class="lift_drive"/>
+  </actuator>
+
+  <sensor>
+    <framepos name="base_pos" objtype="body" objname="base"/>
+    <framequat name="base_quat" objtype="body" objname="base"/>
+    <gyro name="base_gyro" site="imu"/>
+    <accelerometer name="base_acc" site="imu"/>
+  </sensor>
+</mujoco>

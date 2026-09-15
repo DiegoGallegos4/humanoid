@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+build_*/
+install/
+log/
+*.o
+*.elf
+*.bin
+*.map
+
+# ROS 2
+ros/**/install/
+ros/**/build/
+ros/**/log/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Generated sim artifacts
+simulation/mujoco/demo_log.npz
+
+# Editor / OS
+.vscode/
+.DS_Store
+*.swp

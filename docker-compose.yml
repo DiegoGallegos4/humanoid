@@ -1,0 +1,15 @@
+# Nori dev container.
+#   docker compose build dev
+#   docker compose run --rm dev        # interactive shell in /nori
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: nori-dev
+    working_dir: /nori
+    volumes:
+      - .:/nori
+    stdin_open: true
+    tty: true
+    network_mode: host
