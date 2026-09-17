@@ -29,6 +29,10 @@
       <freejoint name="base_free"/>
       <geom name="base_box" type="box" pos="0 0 0.10" size="0.15 0.15 0.075" mass="2.3"/>
       <site name="imu" pos="0 0 0.10" size="0.01"/>
+      <!-- 2D lidar mount: front-top of the chassis, scans in its local XY plane.
+           The nori_hardware plugin casts a ray fan from here (mj_ray) and
+           publishes sensor_msgs/LaserScan. Matches lidar_link in the URDF. -->
+      <site name="lidar" pos="0.12 0 0.19" size="0.02" rgba="0.9 0.2 0.2 1"/>
 
       <!-- drive wheels: spin about the lateral (y) axle, track ±0.13 -->
       <body name="wheel_left" pos="0 0.13 0">

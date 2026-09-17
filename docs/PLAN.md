@@ -12,6 +12,27 @@ Stage 8.
 
 ---
 
+## North star
+
+**Autonomous bimanual mobile pick-and-place: load dishes into a rack, then into
+a dishwasher.** This is the long-term capability target that all Stage-7 work
+aims at. It is long-horizon, contact-rich, dual-arm manipulation combined with
+mobile-base navigation and an articulated appliance (the dishwasher door + rack).
+
+Strategy — **de-risk manipulation early.** The mobile base is comparatively
+solved (odometry done, SLAM/Nav2 are well-trodden); the manipulation +
+perception stack is greenfield and the true long pole, so we stand up a static
+pick-and-place milestone before combining with navigation.
+
+**The one decision that keeps us from undershooting:** object pose is a
+*swappable interface* (`PoseSource`), mirroring the sim/hardware interface
+philosophy already in the repo. v1 = ground-truth pose from the sim (exact,
+free); v2 = estimate from the head depth camera — swapped in without touching
+the manipulation code. Likewise MoveIt uses a **dual-arm planning group from day
+one**, and task sequencing uses **BehaviorTree.CPP** (the same engine Nav2 uses).
+
+---
+
 ## Locked decisions
 
 - **Simulation is the product (for now).** We are **not** buying any hardware.
@@ -130,11 +151,54 @@ sag, thermal, watchdog, overcurrent, disconnected actuator) behaves correctly.
   build on arm64, a dedicated emulated x86_64 Renode sidecar container, or a
   native arm64 release if available. Not needed before Stage 6b.
 
-### Stage 7 — Higher-level robotics in sim
-Deliverable: navigation (Nav2), SLAM, and manipulation (MoveIt 2) bring-up in
-`ros/nori_navigation` and `ros/nori_manipulation`, all against the simulated robot.
-Done when: the sim robot navigates a mapped environment and executes a planned
-arm motion to a pose.
+### Stage 7 — Higher-level robotics in sim  (toward the north star)
+Higher-level autonomy, built as a milestone ladder aimed at *dishes → rack →
+dishwasher*. Each milestone is a testable deliverable; we complete and review one
+before the next. The base track (7A) and the manipulation track (7B–7D) can
+progress independently and converge at 7E.
+
+**Locked-now decisions (so we don't undershoot):**
+- Object pose is a swappable `PoseSource` interface — v1 sim ground-truth,
+  v2 depth-camera estimate — in a new `ros/nori_perception`.
+- MoveIt 2 is the arm planning stack, with a **dual-arm** planning group from the
+  start (`ros/nori_moveit_config`, `ros/nori_manipulation`).
+- Task sequencing uses BehaviorTree.CPP (shared with Nav2) in `ros/nori_bt`.
+- World assets (kitchen bench, dish rack, dishwasher w/ hinged door, dish set)
+  are first-class and versioned under `simulation/mujoco/assets/`.
+- Head camera gains a **depth** stream; gripper finger friction tuned for holding
+  smooth crockery.
+
+**7A — Mobile base autonomy** *(in progress)*
+odometry ✅ → teleop ✅ → 2D lidar (LaserScan) ✅ → SLAM (slam_toolbox) →
+Nav2 goal-to-pose. The lidar is a `mj_ray` fan cast from the `lidar` MJCF site
+inside the nori_hardware plugin, masked to geom group 2 (mappable environment);
+scene.xml gains a 6×6 m room so there is something to scan.
+Done when: the sim robot maps a room and drives to a commanded pose.
+
+**7B — Manipulation foundation** *(the long pole — de-risk early)*
+MoveIt 2 up on the arms; single arm picks a rigid object (mug) from a **known**
+pose and places it at a target; gripper driven through ros2_control.
+Done when: plan → execute pick-and-place succeeds repeatably in MuJoCo.
+
+**7C — Perception-in-the-loop**
+Head depth camera → 6-DOF object pose module; swap the ground-truth `PoseSource`
+for the estimate behind the same interface.
+Done when: 7B pick-and-place works from an *estimated* pose.
+
+**7D — Rack loading** *(static base)*
+Sequence 3+ dishes into slotted rack targets; introduce the behavior tree and a
+simple world model; collision-aware placement.
+Done when: 3+ dishes racked without collision, driven by one behavior tree.
+
+**7E — Mobile manipulation**
+Combine 7A + 7D: navigate to the bench, then rack a dish, all in one behavior
+tree (base + arm coordination, torso lift for reach).
+Done when: the base drives to the bench and the arm racks a dish autonomously.
+
+**7F — North star: dishwasher**
+Articulated dishwasher door (open/close, bimanual), pull the rack, load dishes,
+close. Long-horizon task plan.
+Done when: a full dish-to-dishwasher cycle completes in sim.
 
 ### Stage 8 — Minimum hardware bring-up  (FUTURE / OUT OF SCOPE)
 Not planned now — we are not buying components. Kept only to show the
@@ -149,7 +213,8 @@ one joint. Because sim and hardware share interfaces, the upper stack is unchang
 ```
 nori/
 ├── firmware/      core, hal/{stm32,sim}, drivers, control, safety, protocol, tests
-├── ros/           nori_description, nori_hardware, nori_control, nori_navigation, nori_manipulation
+├── ros/           nori_description, nori_hardware, nori_bringup, nori_navigation,
+│                  nori_perception, nori_moveit_config, nori_manipulation, nori_bt
 ├── simulation/    mujoco, gazebo
 ├── hardware/      electronics, actuators, mechanical
 └── docs/          project-summary.md, PLAN.md, architecture.md
@@ -165,5 +230,11 @@ nori/
 - [x] Stage 5 — simulated robot model (MuJoCo `simulation/mujoco/`: 17-DOF robot, base+lift+head+2 SO-101 arms; `validate.py` gate passes — contract, stable physics, joints track commands)
 - [x] Stage 6 — ROS 2 end-to-end (`ros/`: URDF + ros2_control; `nori_hardware/NoriMujocoSystem` plugin drives MuJoCo in-process; `test_bringup.sh mujoco` passes — trajectory → controllers → physics → `/joint_states` tracks with realistic dynamics)
 - [ ] Stage 6b — firmware ELF under Renode (Sim Level B)
-- [ ] Stage 7 — nav / SLAM / manipulation
+- [~] Stage 7 — higher-level autonomy toward *dishes → rack → dishwasher* (north star)
+  - [~] 7A mobile base: odometry ✅, teleop ✅, 2D lidar ✅ (`/scan`, `test_lidar.sh`), next: SLAM → Nav2
+  - [ ] 7B manipulation foundation (MoveIt 2, single-arm pick-and-place)
+  - [ ] 7C perception-in-the-loop (depth cam → swappable object pose)
+  - [ ] 7D rack loading (behavior tree, multi-dish)
+  - [ ] 7E mobile manipulation (Nav2 + manipulation)
+  - [ ] 7F dishwasher (articulated door, full cycle)
 - [ ] Stage 8 — minimum hardware (FUTURE / out of scope)

@@ -30,6 +30,17 @@
   <xacro:wheel side="left"  y="0.13"/>
   <xacro:wheel side="right" y="-0.13"/>
 
+  <!-- 2D lidar frame — matches the "lidar" site in simulation/mujoco/nori.xml.
+       The nori_hardware plugin publishes /scan in this frame. -->
+  <link name="lidar_link">
+    <visual><geometry><cylinder radius="0.03" length="0.04"/></geometry>
+      <material name="dark"/></visual>
+  </link>
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/><child link="lidar_link"/>
+    <origin xyz="0.12 0 0.19"/>
+  </joint>
+
   <!-- torso lift (prismatic) -->
   <link name="torso_link">
     <visual><origin xyz="0 0 0.175"/><geometry><box size="0.10 0.12 0.35"/></geometry>

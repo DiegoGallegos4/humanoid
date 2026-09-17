@@ -9,6 +9,7 @@
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
 
 // Shared firmware<->ROS contract: the joint id/enum set the plugin must match.
 #include "nori/protocol/messages.hpp"
@@ -75,6 +76,39 @@ hardware_interface::CallbackReturn NoriMujocoSystem::on_init(
   vel_.assign(joints_.size(), 0.0);
   cmd_.assign(joints_.size(), std::numeric_limits<double>::quiet_NaN());
 
+  // --- optional 2D lidar: read params, resolve the MJCF site, set up publisher ---
+  const auto & params = info_.hardware_parameters;
+  auto get_str = [&](const char * k, const std::string & dflt) {
+    auto p = params.find(k);
+    return (p != params.end() && !p->second.empty()) ? p->second : dflt;
+  };
+  auto get_num = [&](const char * k, double dflt) {
+    auto p = params.find(k);
+    return (p != params.end() && !p->second.empty()) ? std::stod(p->second) : dflt;
+  };
+  if (get_str("lidar_enable", "true") != "false") {
+    const std::string site = get_str("lidar_site", "lidar");
+    lidar_site_id_ = mj_name2id(model_, mjOBJ_SITE, site.c_str());
+    if (lidar_site_id_ < 0) {
+      RCLCPP_WARN(logger, "lidar site '%s' not found in model; lidar disabled", site.c_str());
+    } else {
+      lidar_frame_ = get_str("lidar_frame", "lidar_link");
+      lidar_num_beams_ = static_cast<int>(get_num("lidar_num_beams", 360));
+      lidar_angle_min_ = get_num("lidar_angle_min", -M_PI);
+      lidar_angle_max_ = get_num("lidar_angle_max", M_PI);
+      lidar_range_min_ = get_num("lidar_range_min", 0.1);
+      lidar_range_max_ = get_num("lidar_range_max", 8.0);
+      const double rate = std::max(1.0, get_num("lidar_rate", 10.0));
+      lidar_period_ = 1.0 / rate;
+      lidar_node_ = std::make_shared<rclcpp::Node>("nori_lidar");
+      lidar_pub_ = lidar_node_->create_publisher<sensor_msgs::msg::LaserScan>(
+          get_str("lidar_topic", "scan"), rclcpp::SensorDataQoS());
+      lidar_enabled_ = true;
+      RCLCPP_INFO(logger, "lidar: %d beams @ %.1f Hz, frame '%s'",
+                  lidar_num_beams_, rate, lidar_frame_.c_str());
+    }
+  }
+
   RCLCPP_INFO(logger, "loaded '%s': %d DOF, mapped %zu joints",
               mjcf_path.c_str(), static_cast<int>(model_->nv), joints_.size());
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -129,7 +163,7 @@ hardware_interface::return_type NoriMujocoSystem::read(
 }
 
 hardware_interface::return_type NoriMujocoSystem::write(
-    const rclcpp::Time & /*time*/, const rclcpp::Duration & period) {
+    const rclcpp::Time & time, const rclcpp::Duration & period) {
   for (size_t i = 0; i < joints_.size(); ++i) {
     // ros2_control seeds commands with NaN until a controller writes; hold until then
     if (!std::isnan(cmd_[i])) {
@@ -140,7 +174,57 @@ hardware_interface::return_type NoriMujocoSystem::write(
   int n = static_cast<int>(std::lround(period.seconds() / model_->opt.timestep));
   n = std::clamp(n, 1, kMaxSubSteps);
   for (int s = 0; s < n; ++s) mj_step(model_, data_);
+
+  // publish the lidar fan at its own (throttled) rate off the freshly-stepped state
+  if (lidar_enabled_) {
+    lidar_accum_ += period.seconds();
+    if (lidar_accum_ >= lidar_period_) {
+      lidar_accum_ = 0.0;
+      publish_scan(time);
+    }
+  }
   return hardware_interface::return_type::OK;
+}
+
+void NoriMujocoSystem::publish_scan(const rclcpp::Time & stamp) {
+  const int n = lidar_num_beams_;
+  const double inc = (lidar_angle_max_ - lidar_angle_min_) / static_cast<double>(n);
+
+  sensor_msgs::msg::LaserScan scan;
+  scan.header.stamp = stamp;
+  scan.header.frame_id = lidar_frame_;
+  scan.angle_min = static_cast<float>(lidar_angle_min_);
+  scan.angle_max = static_cast<float>(lidar_angle_max_);
+  scan.angle_increment = static_cast<float>(inc);
+  scan.range_min = static_cast<float>(lidar_range_min_);
+  scan.range_max = static_cast<float>(lidar_range_max_);
+  scan.scan_time = static_cast<float>(lidar_period_);
+  scan.time_increment = 0.0F;
+  scan.ranges.resize(n);
+
+  // site pose in world: origin + row-major 3x3 orientation
+  const mjtNum * p = data_->site_xpos + 3 * lidar_site_id_;
+  const mjtNum * R = data_->site_xmat + 9 * lidar_site_id_;
+  // only geoms in group 2 are "mappable environment" — masks out the robot itself
+  mjtByte geomgroup[mjNGROUP] = {0, 0, 1, 0, 0, 0};
+  const float no_return = std::numeric_limits<float>::infinity();
+
+  for (int i = 0; i < n; ++i) {
+    const double a = lidar_angle_min_ + i * inc;
+    // beam direction in the lidar's local XY plane, rotated into world frame
+    const mjtNum dl[3] = {std::cos(a), std::sin(a), 0.0};
+    const mjtNum dir[3] = {R[0] * dl[0] + R[1] * dl[1] + R[2] * dl[2],
+                           R[3] * dl[0] + R[4] * dl[1] + R[5] * dl[2],
+                           R[6] * dl[0] + R[7] * dl[1] + R[8] * dl[2]};
+    int geomid = -1;
+    mjtNum normal[3];
+    const mjtNum dist = mj_ray(model_, data_, p, dir, geomgroup,
+                               /*flg_static=*/1, /*bodyexclude=*/-1, &geomid, normal);
+    scan.ranges[i] = (dist < 0.0 || dist < lidar_range_min_ || dist > lidar_range_max_)
+                         ? no_return
+                         : static_cast<float>(dist);
+  }
+  lidar_pub_->publish(scan);
 }
 
 NoriMujocoSystem::~NoriMujocoSystem() {
