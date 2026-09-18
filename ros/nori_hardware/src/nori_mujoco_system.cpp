@@ -163,7 +163,7 @@ hardware_interface::return_type NoriMujocoSystem::read(
 }
 
 hardware_interface::return_type NoriMujocoSystem::write(
-    const rclcpp::Time & time, const rclcpp::Duration & period) {
+    const rclcpp::Time & /*time*/, const rclcpp::Duration & period) {
   for (size_t i = 0; i < joints_.size(); ++i) {
     // ros2_control seeds commands with NaN until a controller writes; hold until then
     if (!std::isnan(cmd_[i])) {
@@ -180,18 +180,20 @@ hardware_interface::return_type NoriMujocoSystem::write(
     lidar_accum_ += period.seconds();
     if (lidar_accum_ >= lidar_period_) {
       lidar_accum_ = 0.0;
-      publish_scan(time);
+      publish_scan();
     }
   }
   return hardware_interface::return_type::OK;
 }
 
-void NoriMujocoSystem::publish_scan(const rclcpp::Time & stamp) {
+void NoriMujocoSystem::publish_scan() {
   const int n = lidar_num_beams_;
   const double inc = (lidar_angle_max_ - lidar_angle_min_) / static_cast<double>(n);
 
   sensor_msgs::msg::LaserScan scan;
-  scan.header.stamp = stamp;
+  // Stamp with the node's ROS clock (system time) so it lines up with the TF
+  // tree — controller_manager hands write() a *steady* clock, which does not.
+  scan.header.stamp = lidar_node_->now();
   scan.header.frame_id = lidar_frame_;
   scan.angle_min = static_cast<float>(lidar_angle_min_);
   scan.angle_max = static_cast<float>(lidar_angle_max_);

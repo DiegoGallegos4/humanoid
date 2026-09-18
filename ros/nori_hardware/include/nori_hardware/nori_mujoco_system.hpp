@@ -59,7 +59,7 @@ class NoriMujocoSystem : public hardware_interface::SystemInterface {
 
  private:
   // Cast the lidar ray fan against the environment and publish a LaserScan.
-  void publish_scan(const rclcpp::Time & stamp);
+  void publish_scan();
 
   mjModel * model_ = nullptr;
   mjData * data_ = nullptr;

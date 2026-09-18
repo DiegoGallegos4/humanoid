@@ -169,10 +169,13 @@ progress independently and converge at 7E.
   smooth crockery.
 
 **7A — Mobile base autonomy** *(in progress)*
-odometry ✅ → teleop ✅ → 2D lidar (LaserScan) ✅ → SLAM (slam_toolbox) →
+odometry ✅ → teleop ✅ → 2D lidar (LaserScan) ✅ → SLAM (slam_toolbox) ✅ →
 Nav2 goal-to-pose. The lidar is a `mj_ray` fan cast from the `lidar` MJCF site
 inside the nori_hardware plugin, masked to geom group 2 (mappable environment);
-scene.xml gains a 6×6 m room so there is something to scan.
+scene.xml gains a 6×6 m room so there is something to scan. SLAM lives in
+`ros/nori_navigation` (slam_toolbox async, run as a lifecycle node auto-driven
+to active); the scan is stamped with the node's ROS clock, not the steady clock
+controller_manager hands `write()`, so it lines up with the TF tree.
 Done when: the sim robot maps a room and drives to a commanded pose.
 
 **7B — Manipulation foundation** *(the long pole — de-risk early)*
@@ -231,7 +234,7 @@ nori/
 - [x] Stage 6 — ROS 2 end-to-end (`ros/`: URDF + ros2_control; `nori_hardware/NoriMujocoSystem` plugin drives MuJoCo in-process; `test_bringup.sh mujoco` passes — trajectory → controllers → physics → `/joint_states` tracks with realistic dynamics)
 - [ ] Stage 6b — firmware ELF under Renode (Sim Level B)
 - [~] Stage 7 — higher-level autonomy toward *dishes → rack → dishwasher* (north star)
-  - [~] 7A mobile base: odometry ✅, teleop ✅, 2D lidar ✅ (`/scan`, `test_lidar.sh`), next: SLAM → Nav2
+  - [~] 7A mobile base: odometry ✅, teleop ✅, 2D lidar ✅ (`/scan`, `test_lidar.sh`), SLAM ✅ (slam_toolbox, `/map`, `test_slam.sh`), next: Nav2
   - [ ] 7B manipulation foundation (MoveIt 2, single-arm pick-and-place)
   - [ ] 7C perception-in-the-loop (depth cam → swappable object pose)
   - [ ] 7D rack loading (behavior tree, multi-dish)

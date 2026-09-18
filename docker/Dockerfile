@@ -26,6 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-jazzy-ros2-controllers \
       ros-jazzy-robot-state-publisher \
       ros-jazzy-xacro \
+      # Mapping / navigation (Stage 7A): SLAM + Nav2
+      ros-jazzy-slam-toolbox \
     && rm -rf /var/lib/apt/lists/*
 
 # --- MuJoCo (Sim Level C): physics engine, C lib + headers -------------------
