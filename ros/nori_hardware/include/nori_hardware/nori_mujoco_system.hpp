@@ -25,6 +25,7 @@
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 
 namespace nori_hardware {
@@ -60,6 +61,9 @@ class NoriMujocoSystem : public hardware_interface::SystemInterface {
  private:
   // Cast the lidar ray fan against the environment and publish a LaserScan.
   void publish_scan();
+  // Publish the base's true world pose (MuJoCo free joint) — sim-only oracle
+  // for evaluating odometry/SLAM, never used by the control stack itself.
+  void publish_ground_truth();
 
   mjModel * model_ = nullptr;
   mjData * data_ = nullptr;
@@ -83,6 +87,8 @@ class NoriMujocoSystem : public hardware_interface::SystemInterface {
   double lidar_accum_ = 0.0;      // sim time accumulated since last publish
   rclcpp::Node::SharedPtr lidar_node_;
   rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr lidar_pub_;
+  int base_body_id_ = -1;         // MuJoCo body for ground-truth pose
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr gt_pub_;
 };
 
 }  // namespace nori_hardware

@@ -175,7 +175,11 @@ inside the nori_hardware plugin, masked to geom group 2 (mappable environment);
 scene.xml gains a 6×6 m room so there is something to scan. SLAM lives in
 `ros/nori_navigation` (slam_toolbox async, run as a lifecycle node auto-driven
 to active); the scan is stamped with the node's ROS clock, not the steady clock
-controller_manager hands `write()`, so it lines up with the TF tree.
+controller_manager hands `write()`, so it lines up with the TF tree. The plugin also
+publishes `/ground_truth/odom` (sim-only oracle) to measure odometry/SLAM error;
+that exposed ~2x wheel slip on turns, fixed by raising the casters so the drive
+wheels carry the load. Render a run: `ros/record_map.sh` then
+`simulation/mujoco/render_map.py` -> `docs/media/slam_map.png`, `slam_build.mp4`.
 Done when: the sim robot maps a room and drives to a commanded pose.
 
 **7B — Manipulation foundation** *(the long pole — de-risk early)*

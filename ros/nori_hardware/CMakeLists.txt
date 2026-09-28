@@ -10,6 +10,7 @@ find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
 # --- locate the MuJoCo C library shipped by the pip wheel (see docker/Dockerfile)
@@ -37,7 +38,7 @@ target_include_directories(nori_hardware PRIVATE
   ${FIRMWARE_PROTOCOL_INCLUDE})
 target_link_libraries(nori_hardware ${MUJOCO_LIB})
 ament_target_dependencies(nori_hardware
-  hardware_interface pluginlib rclcpp rclcpp_lifecycle sensor_msgs)
+  hardware_interface pluginlib rclcpp rclcpp_lifecycle nav_msgs sensor_msgs)
 
 # find libmujoco.so.X at runtime without polluting global LD_LIBRARY_PATH
 set_target_properties(nori_hardware PROPERTIES

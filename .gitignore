@@ -20,6 +20,7 @@ __pycache__/
 
 # Generated sim artifacts
 simulation/mujoco/demo_log.npz
+simulation/mujoco/map_log.pkl
 
 # Editor / OS
 .vscode/

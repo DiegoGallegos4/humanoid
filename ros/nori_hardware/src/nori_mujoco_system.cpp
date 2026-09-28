@@ -9,6 +9,7 @@
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 
 // Shared firmware<->ROS contract: the joint id/enum set the plugin must match.
@@ -104,6 +105,11 @@ hardware_interface::CallbackReturn NoriMujocoSystem::on_init(
       lidar_pub_ = lidar_node_->create_publisher<sensor_msgs::msg::LaserScan>(
           get_str("lidar_topic", "scan"), rclcpp::SensorDataQoS());
       lidar_enabled_ = true;
+      base_body_id_ = mj_name2id(model_, mjOBJ_BODY, "base");
+      if (base_body_id_ >= 0) {
+        gt_pub_ = lidar_node_->create_publisher<nav_msgs::msg::Odometry>(
+            "ground_truth/odom", rclcpp::SensorDataQoS());
+      }
       RCLCPP_INFO(logger, "lidar: %d beams @ %.1f Hz, frame '%s'",
                   lidar_num_beams_, rate, lidar_frame_.c_str());
     }
@@ -181,6 +187,7 @@ hardware_interface::return_type NoriMujocoSystem::write(
     if (lidar_accum_ >= lidar_period_) {
       lidar_accum_ = 0.0;
       publish_scan();
+      publish_ground_truth();
     }
   }
   return hardware_interface::return_type::OK;
@@ -196,7 +203,8 @@ void NoriMujocoSystem::publish_scan() {
   scan.header.stamp = lidar_node_->now();
   scan.header.frame_id = lidar_frame_;
   scan.angle_min = static_cast<float>(lidar_angle_min_);
-  scan.angle_max = static_cast<float>(lidar_angle_max_);
+  // angle of the LAST beam (REP convention), not the fan end: n beams span n-1 incs
+  scan.angle_max = static_cast<float>(lidar_angle_min_ + (n - 1) * inc);
   scan.angle_increment = static_cast<float>(inc);
   scan.range_min = static_cast<float>(lidar_range_min_);
   scan.range_max = static_cast<float>(lidar_range_max_);
@@ -227,6 +235,24 @@ void NoriMujocoSystem::publish_scan() {
                          : static_cast<float>(dist);
   }
   lidar_pub_->publish(scan);
+}
+
+void NoriMujocoSystem::publish_ground_truth() {
+  if (!gt_pub_) return;
+  const mjtNum * p = data_->xpos + 3 * base_body_id_;
+  const mjtNum * q = data_->xquat + 4 * base_body_id_;  // w, x, y, z
+  nav_msgs::msg::Odometry gt;
+  gt.header.stamp = lidar_node_->now();
+  gt.header.frame_id = "world";
+  gt.child_frame_id = "base_link";
+  gt.pose.pose.position.x = p[0];
+  gt.pose.pose.position.y = p[1];
+  gt.pose.pose.position.z = p[2];
+  gt.pose.pose.orientation.w = q[0];
+  gt.pose.pose.orientation.x = q[1];
+  gt.pose.pose.orientation.y = q[2];
+  gt.pose.pose.orientation.z = q[3];
+  gt_pub_->publish(gt);
 }
 
 NoriMujocoSystem::~NoriMujocoSystem() {

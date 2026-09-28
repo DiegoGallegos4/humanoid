@@ -46,10 +46,13 @@
               friction="1.5 0.05 0.001"/>
       </body>
 
-      <!-- passive casters (fore/aft), low-friction spheres -->
-      <geom name="caster_front" type="sphere" pos="0.12 0 -0.005" size="0.055" mass="0.02"
+      <!-- passive casters (fore/aft), low-friction spheres. Their bottoms sit 4 mm
+           ABOVE the wheel contact line so the drive wheels carry the chassis weight
+           (a real caster-bot's suspension does the same); level with the wheels,
+           the casters stole the load and the wheels slipped ~2x on in-place turns. -->
+      <geom name="caster_front" type="sphere" pos="0.12 0 -0.001" size="0.055" mass="0.02"
             friction="0.05 0.005 0.0001"/>
-      <geom name="caster_rear" type="sphere" pos="-0.12 0 -0.005" size="0.055" mass="0.02"
+      <geom name="caster_rear" type="sphere" pos="-0.12 0 -0.001" size="0.055" mass="0.02"
             friction="0.05 0.005 0.0001"/>
 
       <!-- TORSO LIFT: prismatic column, 0..0.30 m travel. Origin at base top plate. -->
